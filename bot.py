@@ -5,9 +5,9 @@ import os
 from datetime import datetime
 
 # Configuration
-API_ID = int(os.getenv("API_ID", ""))  # Get from environment variables
-API_HASH = os.getenv("API_HASH", "")  # Get from environment variables
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")  # Get from environment variables
+API_ID = int(os.getenv("25136703", ""))  # Get from environment variables
+API_HASH = os.getenv("accfaf5ecd981c67e481328515c39f89", "")  # Get from environment variables
+BOT_TOKEN = os.getenv("8244179451:AAFW8SLabiTyCuTge2fz5LL6VA5sNOH_3pQ", "")  # Get from environment variables
 
 # Initialize bot
 app = Client(
