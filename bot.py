@@ -4,10 +4,24 @@ import sqlite3
 import os
 from datetime import datetime
 
-# Configuration
-API_ID = int(os.getenv("25136703", ""))  # Get from environment variables
-API_HASH = os.getenv("accfaf5ecd981c67e481328515c39f89", "")  # Get from environment variables
-BOT_TOKEN = os.getenv("8244179451:AAFW8SLabiTyCuTge2fz5LL6VA5sNOH_3pQ", "")  # Get from environment variables
+# Configuration - Get from environment variables
+API_ID = os.getenv("API_ID", "")
+API_HASH = os.getenv("API_HASH", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+
+# Validate environment variables
+if not all([API_ID, API_HASH, BOT_TOKEN]):
+    print("❌ Error: Missing environment variables!")
+    print(f"API_ID: {'✅ Set' if API_ID else '❌ Missing'}")
+    print(f"API_HASH: {'✅ Set' if API_HASH else '❌ Missing'}")
+    print(f"BOT_TOKEN: {'✅ Set' if BOT_TOKEN else '❌ Missing'}")
+    exit(1)
+
+try:
+    API_ID = int(API_ID)
+except ValueError:
+    print("❌ Error: API_ID must be a valid integer!")
+    exit(1)
 
 # Initialize bot
 app = Client(
@@ -35,6 +49,7 @@ def init_database():
     """)
     conn.commit()
     conn.close()
+    print("✅ Database initialized successfully")
 
 # Initialize database on startup
 init_database()
@@ -66,9 +81,11 @@ async def track_user_changes(client: Client, message: Message):
             last_name, last_username = result
             if full_name != last_name or username != last_username:
                 should_insert = True
+                print(f"🔄 Change detected for user {user_id}: {last_name} -> {full_name}, {last_username} -> {username}")
         else:
             # New user
             should_insert = True
+            print(f"👤 New user tracked: {user_id} - {full_name}")
 
         if should_insert:
             cursor.execute("""
@@ -78,7 +95,7 @@ async def track_user_changes(client: Client, message: Message):
             conn.commit()
             
     except Exception as e:
-        print(f"Database error: {e}")
+        print(f"❌ Database error: {e}")
     finally:
         conn.close()
 
@@ -165,7 +182,7 @@ async def view_history(client: Client, message: Message):
             
     except Exception as e:
         await message.reply_text("❌ Error retrieving history.")
-        print(f"History error: {e}")
+        print(f"❌ History error: {e}")
     finally:
         conn.close()
 
@@ -219,18 +236,14 @@ async def find_user_history(client: Client, message: Message):
             
     except Exception as e:
         await message.reply_text("❌ Error retrieving user history.")
-        print(f"Find error: {e}")
+        print(f"❌ Find error: {e}")
     finally:
         conn.close()
-
-# Error handler
-@app.on_errors()
-async def error_handler(client: Client, error: Exception):
-    print(f"Error occurred: {error}")
 
 # Run the bot
 if __name__ == "__main__":
     print("🤖 SangMata Bot is starting...")
+    print("✅ Environment variables validated")
     print("✅ Database initialized")
     print("✅ Handlers registered")
     print("🚀 Bot is now running...")
