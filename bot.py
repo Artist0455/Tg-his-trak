@@ -4,30 +4,16 @@ import sqlite3
 import os
 from datetime import datetime
 
-# Configuration - Get from environment variables
-API_ID = os.getenv("API_ID", "")
-API_HASH = os.getenv("API_HASH", "")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-
-# Validate environment variables
-if not all([API_ID, API_HASH, BOT_TOKEN]):
-    print("❌ Error: Missing environment variables!")
-    print(f"API_ID: {'✅ Set' if API_ID else '❌ Missing'}")
-    print(f"API_HASH: {'✅ Set' if API_HASH else '❌ Missing'}")
-    print(f"BOT_TOKEN: {'✅ Set' if BOT_TOKEN else '❌ Missing'}")
-    exit(1)
-
-try:
-    API_ID = int(API_ID)
-except ValueError:
-    print("❌ Error: API_ID must be a valid integer!")
-    exit(1)
+# Configuration with your credentials
+API_ID = 25136703
+API_HASH = "accfaf5ecd981c67e481328515c39f89"
+BOT_TOKEN = "8244179451:AAFW8SLabiTyCuTge2fz5LL6VA5sNOH_3pQ"
 
 # Initialize bot
 app = Client(
-    "sangmata_bot", 
-    api_id=API_ID, 
-    api_hash=API_HASH, 
+    "sangmata_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
     bot_token=BOT_TOKEN
 )
 
@@ -54,7 +40,7 @@ def init_database():
 # Initialize database on startup
 init_database()
 
-# Middleware: Track user data changes
+# Track user data changes
 @app.on_message(filters.private | filters.group)
 async def track_user_changes(client: Client, message: Message):
     user = message.from_user
@@ -62,13 +48,16 @@ async def track_user_changes(client: Client, message: Message):
         return
 
     user_id = user.id
-    full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    first_name = user.first_name or ""
+    last_name = user.last_name or ""
+    full_name = f"{first_name} {last_name}".strip()
     username = user.username or "No Username"
 
     conn = sqlite3.connect("history.db")
     cursor = conn.cursor()
 
     try:
+        # Get last record
         cursor.execute("""
             SELECT name, username FROM user_history 
             WHERE user_id = ? 
@@ -81,11 +70,10 @@ async def track_user_changes(client: Client, message: Message):
             last_name, last_username = result
             if full_name != last_name or username != last_username:
                 should_insert = True
-                print(f"🔄 Change detected for user {user_id}: {last_name} -> {full_name}, {last_username} -> {username}")
+                print(f"🔄 Change detected for user {user_id}")
         else:
-            # New user
             should_insert = True
-            print(f"👤 New user tracked: {user_id} - {full_name}")
+            print(f"👤 New user tracked: {user_id}")
 
         if should_insert:
             cursor.execute("""
@@ -93,65 +81,64 @@ async def track_user_changes(client: Client, message: Message):
                 VALUES (?, ?, ?, ?)
             """, (user_id, full_name, username, datetime.now()))
             conn.commit()
+            print(f"✅ Recorded: {full_name} (@{username})")
             
     except Exception as e:
         print(f"❌ Database error: {e}")
     finally:
         conn.close()
 
-# /start command
+# Start command
 @app.on_message(filters.command("start"))
 async def start_command(client: Client, message: Message):
     welcome_text = """
 🤖 **Welcome to SangMata Bot!**
 
-I can track and display history of username and name changes on Telegram.
+I track and display history of username and name changes on Telegram.
 
-**Available Commands:**
-• `/start` - Show this welcome message
-• `/history` - View your name/username history
-• `/find <user_id>` - Find history of other users
-• `/help` - Get help information
+**Commands:**
+• `/start` - Show this message
+• `/history` - View your name history
+• `/find <user_id>` - Find user history
+• `/help` - Get help
 
 **How to use:**
-Simply add me to your group or chat with me privately, and I'll automatically track changes!
+Add me to your group or chat with me privately!
     """
     
     await message.reply_text(
         welcome_text,
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📚 GitHub", url="https://github.com")],
-            [InlineKeyboardButton("👨‍💻 Developer", url="https://t.me/yourusername")],
-            [InlineKeyboardButton("🔍 Try History", switch_inline_query_current_chat="history")]
+            [InlineKeyboardButton("📢 Add to Group", url="http://t.me/SangMataTracker_Bot?startgroup=true")],
+            [InlineKeyboardButton("💬 Support", url="https://t.me/YourSupport")],
         ])
     )
+    print(f"✅ Start command used by {message.from_user.id}")
 
-# /help command
+# Help command
 @app.on_message(filters.command("help"))
 async def help_command(client: Client, message: Message):
     help_text = """
 🆘 **Help Guide**
 
 **Commands:**
-• `/start` - Start the bot and see welcome message
-• `/history` - View your personal name/username history
-• `/find <user_id>` - Find history of specific user by ID
-• `/help` - Show this help message
+• `/start` - Start the bot
+• `/history` - View your history
+• `/find <user_id>` - Find user history
+• `/help` - This message
 
-**Examples:**
-• `/find 123456789` - Find history for user with ID 123456789
+**Example:**
+`/find 123456789` - Find history for user ID 123456789
 
-**Note:**
-- The bot must be in the same group to track users
-- User ID must be numeric
-- Privacy settings may limit some functionality
+**Note:** I need to be in the group to track users!
     """
     await message.reply_text(help_text)
 
-# /history command: View personal history
+# History command
 @app.on_message(filters.command("history"))
 async def view_history(client: Client, message: Message):
     user_id = message.from_user.id
+    user_name = message.from_user.first_name
 
     conn = sqlite3.connect("history.db")
     cursor = conn.cursor()
@@ -162,21 +149,19 @@ async def view_history(client: Client, message: Message):
             FROM user_history
             WHERE user_id = ?
             ORDER BY change_time DESC
-            LIMIT 50
+            LIMIT 20
         """, (user_id,))
         records = cursor.fetchall()
         
         if records:
-            history = f"📜 **History of Changes for {message.from_user.first_name}:**\n\n"
+            history_text = f"📜 **History for {user_name}:**\n\n"
             for i, (name, username, time) in enumerate(records, 1):
-                history += f"**{i}.** Name: `{name}`\n"
-                history += f"    Username: `{username}`\n"
-                history += f"    Time: `{time}`\n\n"
+                history_text += f"**{i}.** 👤 `{name}`\n"
+                history_text += f"    📱 `@{username}`\n"
+                history_text += f"    🕐 `{time}`\n\n"
             
-            if len(history) > 4000:
-                history = history[:4000] + "\n\n... (history truncated)"
-                
-            await message.reply_text(history)
+            await message.reply_text(history_text)
+            print(f"✅ History sent to {user_id}")
         else:
             await message.reply_text("❌ No history found for your account.")
             
@@ -186,19 +171,11 @@ async def view_history(client: Client, message: Message):
     finally:
         conn.close()
 
-# /find command: View history of other users
+# Find command
 @app.on_message(filters.command("find"))
 async def find_user_history(client: Client, message: Message):
     if len(message.command) < 2:
-        await message.reply_text("""
-❌ **Invalid Usage**
-
-**Correct Usage:**
-`/find <user_id>`
-
-**Example:**
-`/find 123456789`
-        """)
+        await message.reply_text("❌ Usage: `/find 123456789`")
         return
 
     try:
@@ -216,21 +193,19 @@ async def find_user_history(client: Client, message: Message):
             FROM user_history
             WHERE user_id = ?
             ORDER BY change_time DESC
-            LIMIT 50
+            LIMIT 20
         """, (user_id,))
         records = cursor.fetchall()
 
         if records:
-            history = f"📜 **History of Changes for User ID:** `{user_id}`\n\n"
+            history_text = f"📜 **History for User ID:** `{user_id}`\n\n"
             for i, (name, username, time) in enumerate(records, 1):
-                history += f"**{i}.** Name: `{name}`\n"
-                history += f"    Username: `{username}`\n"
-                history += f"    Time: `{time}`\n\n"
+                history_text += f"**{i}.** 👤 `{name}`\n"
+                history_text += f"    📱 `@{username}`\n"
+                history_text += f"    🕐 `{time}`\n\n"
             
-            if len(history) > 4000:
-                history = history[:4000] + "\n\n... (history truncated)"
-                
-            await message.reply_text(history)
+            await message.reply_text(history_text)
+            print(f"✅ Found history for {user_id}")
         else:
             await message.reply_text(f"❌ No history found for user ID `{user_id}`.")
             
@@ -240,11 +215,15 @@ async def find_user_history(client: Client, message: Message):
     finally:
         conn.close()
 
-# Run the bot
-if __name__ == "__main__":
-    print("🤖 SangMata Bot is starting...")
-    print("✅ Environment variables validated")
-    print("✅ Database initialized")
-    print("✅ Handlers registered")
-    print("🚀 Bot is now running...")
-    app.run()
+# Test command to check if bot is alive
+@app.on_message(filters.command("ping"))
+async def ping_command(client: Client, message: Message):
+    await message.reply_text("🏓 **Pong!** Bot is alive and working!")
+    print(f"✅ Ping from {message.from_user.id}")
+
+print("🤖 Starting SangMata Bot...")
+print("✅ Credentials loaded")
+print("✅ Database ready")
+print("🚀 Bot is running...")
+
+app.run()
