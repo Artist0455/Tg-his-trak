@@ -1,25 +1,24 @@
-# Instagram Downloader Telegram Bot
+# Instagram Downloader Bot
 
-A Telegram bot that downloads Instagram Reels, Posts, and Stories.
+A Telegram bot to download Instagram content.
 
 ## 🚀 Deploy on Render
 
-### Method 1: One-Click Deploy
-
+### One-Click Deploy
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-### Method 2: Manual Deployment
+### Manual Deployment
+1. Fork this repo
+2. Create Web Service on Render
+3. Add environment variables
+4. Deploy!
 
-1. **Fork this repository**
-2. **Create a new Web Service on Render**
-3. **Connect your GitHub repository**
-4. **Add environment variables:**
-   - `API_ID`: From https://my.telegram.org
-   - `API_HASH`: From https://my.telegram.org  
-   - `BOT_TOKEN`: From @BotFather on Telegram
-   - `LOG_GROUP`: Optional - Group ID for logs
-   - `DUMP_GROUP`: Optional - Group ID for storing media
+## 🔧 Environment Variables
+- `API_ID`: Telegram API ID
+- `API_HASH`: Telegram API Hash  
+- `BOT_TOKEN`: Bot token from @BotFather
 
-5. **Build Command:**
-   ```bash
-   pip install -r requirements.txt
+## 📋 Features
+- Download Instagram Reels, Posts, Stories
+- Fast and reliable
+- Multiple media support
