@@ -9,10 +9,7 @@ API_ID = 25136703
 API_HASH = "accfaf5ecd981c67e481328515c39f89"
 BOT_TOKEN = "8244179451:AAFW8SLabiTyCuTge2fz5LL6VA5sNOH_3pQ"
 
-print("🤖 Bot starting with your credentials...")
-print("📱 API_ID:", API_ID)
-print("🔑 API_HASH:", API_HASH)
-print("🤖 BOT_TOKEN:", BOT_TOKEN[:10] + "..." + BOT_TOKEN[-5:])
+print("🤖 Bot starting with real data tracking...")
 
 # Bot initialize karo
 app = Client(
@@ -22,7 +19,7 @@ app = Client(
     bot_token=BOT_TOKEN
 )
 
-# Database setup - improved
+# Database setup
 def init_db():
     conn = sqlite3.connect('sangmata.db', check_same_thread=False)
     c = conn.cursor()
@@ -32,96 +29,13 @@ def init_db():
                   name TEXT,
                   username TEXT, 
                   timestamp TEXT)''')
-    
-    # Test ke liye kuch sample data add karo
-    c.execute("SELECT COUNT(*) FROM user_history")
-    count = c.fetchone()[0]
-    
-    if count == 0:
-        # Sample data add karo testing ke liye
-        sample_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        c.execute("INSERT INTO user_history (user_id, name, username, timestamp) VALUES (?, ?, ?, ?)",
-                 (123456789, "Test User", "testuser", sample_time))
-        print("✅ Sample data added for testing")
-    
     conn.commit()
     conn.close()
-    print("✅ Database initialized")
+    print("✅ Database ready for real data tracking")
 
 init_db()
 
-# /start command - working
-@app.on_message(filters.command("start"))
-async def start_cmd(client, message):
-    user = message.from_user
-    print(f"🎯 Start from: {user.id} - {user.first_name}")
-    
-    # User ko automatically track karo
-    await track_user(user)
-    
-    welcome_msg = f"""
-👋 **Hello {user.first_name}!**
-
-🤖 **SangMata Bot** - Name History Tracker
-
-I track and display username/name change history of Telegram users.
-
-**📋 Commands:**
-• /start - Start bot
-• /history - Your name history  
-• /find [user_id] - Find any user's history
-• /help - Help guide
-• /test - Test if bot is working
-
-**🚀 Usage:**
-1. Add me to any group
-2. I'll automatically track name changes
-3. Use /history to see your history
-4. Use /find to see others' history
-
-**Example:** `/find 123456789`
-    """
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Add to Group", url="http://t.me/SangMataTracker_Bot?startgroup=true")],
-        [InlineKeyboardButton("📊 Check History", callback_data="history")],
-        [InlineKeyboardButton("🔍 Find User", callback_data="find")]
-    ])
-    
-    await message.reply_text(welcome_msg, reply_markup=keyboard)
-
-# /test command - bot working hai ya nahi check karo
-@app.on_message(filters.command("test"))
-async def test_cmd(client, message):
-    user = message.from_user
-    await message.reply_text(f"✅ **Bot is Working!**\n\nYour ID: `{user.id}`\nYour Name: `{user.first_name}`\nUsername: `@{user.username or 'No Username'}`")
-    print(f"✅ Test command from {user.id}")
-
-# /help command
-@app.on_message(filters.command("help"))
-async def help_cmd(client, message):
-    help_text = """
-🆘 **Help Guide**
-
-**📋 Commands:**
-• /start - Start the bot
-• /history - View your name history
-• /find [user_id] - Find user's history
-• /test - Test bot functionality
-• /help - This message
-
-**🔍 Examples:**
-• `/find 123456789` - Find history for user ID 123456789
-• `/history` - See your own history
-
-**💡 Tips:**
-- Add bot to group for automatic tracking
-- User ID must be a number
-- Bot will track all users in the group
-    """
-    await message.reply_text(help_text)
-
-# User tracking function
+# User tracking function - improved
 async def track_user(user):
     user_id = user.id
     first_name = user.first_name or ""
@@ -133,7 +47,7 @@ async def track_user(user):
     c = conn.cursor()
     
     try:
-        # Pehle check karo user already exists ya nahi
+        # Pehle check karo user ka last record kya hai
         c.execute("SELECT name, username FROM user_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1", (user_id,))
         last_record = c.fetchone()
         
@@ -141,31 +55,95 @@ async def track_user(user):
         
         if last_record:
             last_name_db, last_username_db = last_record
+            # Agar change hua hai toh naya record add karo
             if full_name != last_name_db or username != last_username_db:
-                # Change detect hua hai
                 c.execute("INSERT INTO user_history (user_id, name, username, timestamp) VALUES (?, ?, ?, ?)", 
                          (user_id, full_name, username, current_time))
                 conn.commit()
-                print(f"🔄 Change: {user_id} - '{last_name_db}'→'{full_name}', '@{last_username_db}'→'@{username}'")
+                print(f"🔄 Change detected: {user_id} - '{last_name_db}'→'{full_name}', '@{last_username_db}'→'@{username}'")
         else:
-            # New user - pehli baar track ho raha hai
+            # Pehli baar user track ho raha hai
             c.execute("INSERT INTO user_history (user_id, name, username, timestamp) VALUES (?, ?, ?, ?)", 
                      (user_id, full_name, username, current_time))
             conn.commit()
-            print(f"👤 New: {user_id} - {full_name} (@{username})")
+            print(f"👤 New user tracked: {user_id} - {full_name} (@{username})")
             
     except Exception as e:
         print(f"❌ Tracking error: {e}")
     finally:
         conn.close()
 
-# /history command - tumhara apna history
+# /start command
+@app.on_message(filters.command("start"))
+async def start_cmd(client, message):
+    user = message.from_user
+    print(f"🎯 Start from: {user.id} - {user.first_name}")
+    
+    # User ko track karo
+    await track_user(user)
+    
+    welcome_msg = f"""
+👋 **Hello {user.first_name}!**
+
+🤖 **Real SangMata Bot** - Real Data Tracking
+
+**Yeh Bot REAL DATA Track Karega:**
+✅ Real username changes
+✅ Real name changes  
+✅ Real timestamp
+❌ Fake data nahi
+
+**📋 Commands:**
+• /start - Start bot
+• /history - Your REAL history  
+• /find [user_id] - Find user's REAL history
+• /myinfo - Your current info
+
+**💡 Important:**
+- Bot ko group mein add karo
+- Users jab name/username change karenge tabhi history banega
+- Abhi koi history nahi dikhega kyunki tracking abhi shuru hua hai
+    """
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Add to Group", url="http://t.me/SangMataTracker_Bot?startgroup=true")],
+        [InlineKeyboardButton("📊 My History", callback_data="myhistory")],
+    ])
+    
+    await message.reply_text(welcome_msg, reply_markup=keyboard)
+
+# /myinfo command - current info dekho
+@app.on_message(filters.command("myinfo"))
+async def myinfo_cmd(client, message):
+    user = message.from_user
+    user_id = user.id
+    first_name = user.first_name or ""
+    last_name = user.last_name or ""
+    full_name = f"{first_name} {last_name}".strip()
+    username = user.username or "No Username"
+    
+    info_text = f"""
+📱 **Your Current Info:**
+
+**User ID:** `{user_id}`
+**Full Name:** `{full_name}`
+**Username:** `@{username}`
+**First Name:** `{first_name}`
+**Last Name:** `{last_name or 'None'}`
+
+**💡 Tip:** 
+Agar apna name ya username change karoge toh bot automatically track karega!
+    """
+    
+    await message.reply_text(info_text)
+
+# /history command - REAL history
 @app.on_message(filters.command("history"))
 async def history_cmd(client, message):
     user = message.from_user
     user_id = user.id
     
-    print(f"📜 History requested by {user_id}")
+    print(f"📜 Real history requested by {user_id}")
     
     # Pehle current user ko track karo
     await track_user(user)
@@ -174,29 +152,45 @@ async def history_cmd(client, message):
     c = conn.cursor()
     
     try:
-        c.execute("SELECT name, username, timestamp FROM user_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 20", (user_id,))
+        c.execute("SELECT name, username, timestamp FROM user_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 25", (user_id,))
         records = c.fetchall()
         
         if records:
-            history_msg = f"📜 **Name History for {user.first_name}**\n\n"
+            history_msg = f"📜 **Real History for {user.first_name}**\n\n"
             
             for i, (name, username, time) in enumerate(records, 1):
                 history_msg += f"**{i}. 👤 {name}**\n"
                 history_msg += f"   📱 @{username}\n" 
                 history_msg += f"   🕐 {time}\n\n"
             
+            # Agar sirf 1 record hai toh message different dikhao
+            if len(records) == 1:
+                history_msg += "**💡 Tip:** Name ya username change karo aur phir /history check karo!"
+            
             await message.reply_text(history_msg)
-            print(f"✅ History sent to {user_id} - {len(records)} records")
+            print(f"✅ Real history sent to {user_id} - {len(records)} records")
         else:
-            await message.reply_text("❌ No history found! Try changing your name or username first.")
+            await message.reply_text("""
+❌ **No History Found Yet!**
+
+**Kyun?** 
+- Bot naya start hua hai
+- Abhi tak koi name/username change nahi hua
+- Tracking abhi shuru hua hai
+
+**📝 Solution:**
+1. Apna name ya username change karo
+2. Phir /history check karo
+3. Ya bot ko group mein add karo
+            """)
             
     except Exception as e:
-        await message.reply_text("❌ Error getting history")
+        await message.reply_text("❌ Error getting real history")
         print(f"❌ History error: {e}")
     finally:
         conn.close()
 
-# /find command - kisi aur ka history dekho
+# /find command - REAL user data
 @app.on_message(filters.command("find"))
 async def find_cmd(client, message):
     user = message.from_user
@@ -205,9 +199,9 @@ async def find_cmd(client, message):
         await message.reply_text("""
 ❌ **Usage:** `/find USER_ID`
 
-**Examples:**
-• `/find 123456789`
-• `/find 5511953244`
+**Example:** `/find 5511953244`
+
+**Note:** Sirf REAL data dikhega jo actually track hua hai
         """)
         return
     
@@ -217,17 +211,17 @@ async def find_cmd(client, message):
         await message.reply_text("❌ User ID must be a number!")
         return
     
-    print(f"🔍 {user.id} finding history for {target_id}")
+    print(f"🔍 {user.id} finding REAL history for {target_id}")
     
     conn = sqlite3.connect('sangmata.db', check_same_thread=False)
     c = conn.cursor()
     
     try:
-        c.execute("SELECT name, username, timestamp FROM user_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 20", (target_id,))
+        c.execute("SELECT name, username, timestamp FROM user_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 25", (target_id,))
         records = c.fetchall()
         
         if records:
-            history_msg = f"📜 **History for User ID:** `{target_id}`\n\n"
+            history_msg = f"📜 **Real History for User ID:** `{target_id}`\n\n"
             
             for i, (name, username, time) in enumerate(records, 1):
                 history_msg += f"**{i}. 👤 {name}**\n"
@@ -235,43 +229,52 @@ async def find_cmd(client, message):
                 history_msg += f"   🕐 {time}\n\n"
             
             await message.reply_text(history_msg)
-            print(f"✅ History found for {target_id} - {len(records)} records")
+            print(f"✅ Real history found for {target_id} - {len(records)} records")
         else:
-            await message.reply_text(f"❌ No history found for user ID `{target_id}`\n\nTry this ID for testing: `123456789`")
+            await message.reply_text(f"""
+❌ **No Real History Found for** `{target_id}`
+
+**Possible Reasons:**
+- User ne abhi tak name/username change nahi kiya
+- Bot ne user ko abhi tak track nahi kiya  
+- User ID galat hai
+
+**💡 Solution:**
+- User ko bot ke saath interact karwao
+- User apna name change kare
+- Ya user ko group mein add karo jahan bot hai
+            """)
             
     except Exception as e:
-        await message.reply_text("❌ Error finding user history")
+        await message.reply_text("❌ Error finding real user history")
         print(f"❌ Find error: {e}")
     finally:
         conn.close()
 
-# Har message pe track karo
+# Har message pe REAL tracking
 @app.on_message(filters.all)
 async def track_all_messages(client, message):
     if message.from_user:
         await track_user(message.from_user)
 
-# Callback queries handle karo
+# Callback queries
 @app.on_callback_query()
 async def handle_callbacks(client, callback_query):
     user = callback_query.from_user
     data = callback_query.data
     
-    if data == "history":
-        await callback_query.message.edit_text("🔄 Getting your history...")
-        # Simulate history command
+    if data == "myhistory":
+        await callback_query.message.edit_text("🔄 Getting your REAL history...")
         await history_cmd(client, callback_query.message)
-    elif data == "find":
-        await callback_query.message.edit_text("🔍 Use `/find USER_ID` to find any user's history\n\nExample: `/find 123456789`")
     
     await callback_query.answer()
 
 print("=" * 50)
-print("🚀 BOT STARTING...")
-print("✅ Database Ready")
-print("✅ Handlers Registered") 
-print("✅ Credentials Loaded")
-print("🎯 Bot is NOW RUNNING!")
+print("🚀 REAL DATA BOT STARTING...")
+print("✅ Only REAL data will be tracked")
+print("✅ No fake data")
+print("✅ Real user changes only")
+print("🎯 Bot is NOW TRACKING REAL DATA!")
 print("=" * 50)
 
 # Bot run karo
