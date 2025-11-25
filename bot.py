@@ -1,281 +1,189 @@
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-import sqlite3
 import os
-from datetime import datetime
+import re
+import asyncio
+import requests
+import bs4
+from pyrogram import Client, filters
+from pyrogram.types import Message
 
-# Tumhare credentials
-API_ID = 25136703
-API_HASH = "accfaf5ecd981c67e481328515c39f89"
-BOT_TOKEN = "8244179451:AAFW8SLabiTyCuTge2fz5LL6VA5sNOH_3pQ"
+# Configuration from environment variables
+API_ID = int(os.getenv("API_ID", "25136703"))
+API_HASH = os.getenv("API_HASH", "accfaf5ecd981c67e481328515c39f89")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8244179451:AAER_dLg1rQT2E9wuE5XRqDumNzuBWU1JPE")
+LOG_GROUP = os.getenv("LOG_GROUP", "")
+DUMP_GROUP = os.getenv("DUMP_GROUP", "")
 
-print("🤖 Bot starting with real data tracking...")
+# Headers for requests
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "X-Requested-With": "XMLHttpRequest",
+    "Origin": "https://saveig.app",
+    "Connection": "keep-alive",
+    "Referer": "https://saveig.app/en",
+}
 
-# Bot initialize karo
+print("🚀 Starting Instagram Bot...")
+print(f"🤖 Bot Token: {BOT_TOKEN[:10]}...")
+print(f"🔑 API ID: {API_ID}")
+
+# Initialize Pyrogram Client
 app = Client(
-    "sangmata_bot",
+    "instagram_bot",
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN
 )
 
-# Database setup
-def init_db():
-    conn = sqlite3.connect('sangmata.db', check_same_thread=False)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS user_history
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  user_id INTEGER,
-                  name TEXT,
-                  username TEXT, 
-                  timestamp TEXT)''')
-    conn.commit()
-    conn.close()
-    print("✅ Database ready for real data tracking")
-
-init_db()
-
-# User tracking function - improved
-async def track_user(user):
-    user_id = user.id
-    first_name = user.first_name or ""
-    last_name = user.last_name or ""
-    full_name = f"{first_name} {last_name}".strip()
-    username = user.username or "No Username"
-    
-    conn = sqlite3.connect('sangmata.db', check_same_thread=False)
-    c = conn.cursor()
+@app.on_message(filters.regex(r'https?://.*instagram[^\s]+') & filters.incoming)
+async def instagram_downloader(client, message: Message):
+    link = message.matches[0].group(0)
+    print(f"📥 Received Instagram link: {link}")
     
     try:
-        # Pehle check karo user ka last record kya hai
-        c.execute("SELECT name, username FROM user_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1", (user_id,))
-        last_record = c.fetchone()
+        # Send processing message
+        m = await message.reply("🔄 Processing your Instagram link...")
         
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Method 1: Try ddinstagram.com first
+        url = link.replace("instagram.com", "ddinstagram.com")
+        url = url.replace("==", "%3D%3D")
         
-        if last_record:
-            last_name_db, last_username_db = last_record
-            # Agar change hua hai toh naya record add karo
-            if full_name != last_name_db or username != last_username_db:
-                c.execute("INSERT INTO user_history (user_id, name, username, timestamp) VALUES (?, ?, ?, ?)", 
-                         (user_id, full_name, username, current_time))
-                conn.commit()
-                print(f"🔄 Change detected: {user_id} - '{last_name_db}'→'{full_name}', '@{last_username_db}'→'@{username}'")
-        else:
-            # Pehli baar user track ho raha hai
-            c.execute("INSERT INTO user_history (user_id, name, username, timestamp) VALUES (?, ?, ?, ?)", 
-                     (user_id, full_name, username, current_time))
-            conn.commit()
-            print(f"👤 New user tracked: {user_id} - {full_name} (@{username})")
+        try:
+            print("🔧 Trying ddinstagram method...")
+            if url.endswith("="):
+                dump_file = await message.reply_video(url[:-1], caption="✅ Downloaded via @InstaDownloaderBot")
+            else:
+                dump_file = await message.reply_video(url, caption="✅ Downloaded via @InstaDownloaderBot")
             
+            if DUMP_GROUP:
+                await dump_file.copy(int(DUMP_GROUP))
+            await m.delete()
+            print("✅ Success with ddinstagram method")
+            return
+            
+        except Exception as e:
+            print(f"❌ ddinstagram failed: {e}")
+            
+            # Method 2: Use saveig.app API
+            await m.edit("🔍 Trying alternative method...")
+            
+            if "/reel/" in url or "/p/" in url or "stories" in url:
+                try:
+                    print("🌐 Using saveig.app API...")
+                    # Make API request to saveig.app
+                    response = requests.post(
+                        "https://saveig.app/api/ajaxSearch",
+                        data={"q": link, "t": "media", "lang": "en"},
+                        headers=headers,
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        json_data = response.json()
+                        print("📦 API response received")
+                        
+                        if 'data' in json_data:
+                            # Extract all media links
+                            media_links = re.findall(r'href="(https?://[^"]+)"', json_data['data'])
+                            print(f"📷 Found {len(media_links)} media files")
+                            
+                            if media_links:
+                                success_count = 0
+                                for media_url in media_links[:5]:  # Limit to 5 media files
+                                    try:
+                                        if media_url.endswith(('.mp4', '.mov', '.avi')):
+                                            sent_msg = await message.reply_video(
+                                                media_url, 
+                                                caption=f"🎥 Media {success_count + 1} | Downloaded via @InstaDownloaderBot"
+                                            )
+                                        else:
+                                            sent_msg = await message.reply_photo(
+                                                media_url,
+                                                caption=f"📸 Photo {success_count + 1} | Downloaded via @InstaDownloaderBot"
+                                            )
+                                        
+                                        success_count += 1
+                                        
+                                        # Forward to dump group if configured
+                                        if DUMP_GROUP and success_count == 1:
+                                            await sent_msg.copy(int(DUMP_GROUP))
+                                            
+                                        await asyncio.sleep(1)  # Delay between sends
+                                        
+                                    except Exception as media_error:
+                                        print(f"❌ Media error: {media_error}")
+                                        continue
+                                
+                                if success_count > 0:
+                                    await m.delete()
+                                    await message.reply(f"✅ Successfully downloaded {success_count} files!")
+                                    return
+                                else:
+                                    await m.edit("❌ All media downloads failed")
+                            else:
+                                await m.edit("❌ No media links found in the response")
+                        else:
+                            await m.edit("❌ Invalid API response format")
+                    else:
+                        await m.edit(f"❌ API request failed with status {response.status_code}")
+                        
+                except Exception as api_error:
+                    error_msg = f"API Error: {str(api_error)}"
+                    print(f"❌ API Error: {api_error}")
+                    await m.edit("❌ API service temporarily unavailable")
+                    
+                    if LOG_GROUP:
+                        await client.send_message(int(LOG_GROUP), error_msg)
+        
+        # If all methods fail
+        await m.edit("❌ Sorry, couldn't download this content. Possible reasons:\n• Private account\n• Invalid link\n• Server issue\n\nTry another link!")
+        
     except Exception as e:
-        print(f"❌ Tracking error: {e}")
-    finally:
-        conn.close()
+        error_message = f"Error: {str(e)}"
+        print(f"💥 Critical error: {e}")
+        await message.reply("❌ An internal error occurred. Please try again later.")
+        
+        # Log error if LOG_GROUP is set
+        if LOG_GROUP:
+            await client.send_message(int(LOG_GROUP), f"Error for {link}:\n{error_message}")
 
-# /start command
 @app.on_message(filters.command("start"))
-async def start_cmd(client, message):
-    user = message.from_user
-    print(f"🎯 Start from: {user.id} - {user.first_name}")
-    
-    # User ko track karo
-    await track_user(user)
-    
-    welcome_msg = f"""
-👋 **Hello {user.first_name}!**
+async def start_command(client, message: Message):
+    await message.reply_text(
+        "🤖 **Instagram Downloader Bot**\n\n"
+        "Send me any Instagram link and I'll download it for you!\n\n"
+        "**Supported Links:**\n"
+        "• 📹 Instagram Reels\n"
+        "• 📸 Instagram Posts\n" 
+        "• 🎬 Instagram Stories\n\n"
+        "**How to use:**\n"
+        "1. Copy Instagram link\n"
+        "2. Paste here\n"
+        "3. Wait for download\n\n"
+        "Made with ❤️ for Telegram"
+    )
 
-🤖 **Real SangMata Bot** - Real Data Tracking
+@app.on_message(filters.command("help"))
+async def help_command(client, message: Message):
+    await message.reply_text(
+        "📖 **Help Guide**\n\n"
+        "**Supported Links:**\n"
+        "• Reels: `https://instagram.com/reel/ABC123/`\n"
+        "• Posts: `https://instagram.com/p/XYZ789/`\n"
+        "• Stories: `https://instagram.com/stories/username/123/`\n\n"
+        "**Features:**\n"
+        "• Fast downloads\n"
+        "• Multiple media support\n"
+        "• High quality\n\n"
+        "Just paste your link and enjoy! 🎉"
+    )
 
-**Yeh Bot REAL DATA Track Karega:**
-✅ Real username changes
-✅ Real name changes  
-✅ Real timestamp
-❌ Fake data nahi
+@app.on_message(filters.command("status"))
+async def status_command(client, message: Message):
+    await message.reply_text("🤖 Bot is running perfectly! ✅")
 
-**📋 Commands:**
-• /start - Start bot
-• /history - Your REAL history  
-• /find [user_id] - Find user's REAL history
-• /myinfo - Your current info
-
-**💡 Important:**
-- Bot ko group mein add karo
-- Users jab name/username change karenge tabhi history banega
-- Abhi koi history nahi dikhega kyunki tracking abhi shuru hua hai
-    """
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Add to Group", url="http://t.me/SangMataTracker_Bot?startgroup=true")],
-        [InlineKeyboardButton("📊 My History", callback_data="myhistory")],
-    ])
-    
-    await message.reply_text(welcome_msg, reply_markup=keyboard)
-
-# /myinfo command - current info dekho
-@app.on_message(filters.command("myinfo"))
-async def myinfo_cmd(client, message):
-    user = message.from_user
-    user_id = user.id
-    first_name = user.first_name or ""
-    last_name = user.last_name or ""
-    full_name = f"{first_name} {last_name}".strip()
-    username = user.username or "No Username"
-    
-    info_text = f"""
-📱 **Your Current Info:**
-
-**User ID:** `{user_id}`
-**Full Name:** `{full_name}`
-**Username:** `@{username}`
-**First Name:** `{first_name}`
-**Last Name:** `{last_name or 'None'}`
-
-**💡 Tip:** 
-Agar apna name ya username change karoge toh bot automatically track karega!
-    """
-    
-    await message.reply_text(info_text)
-
-# /history command - REAL history
-@app.on_message(filters.command("history"))
-async def history_cmd(client, message):
-    user = message.from_user
-    user_id = user.id
-    
-    print(f"📜 Real history requested by {user_id}")
-    
-    # Pehle current user ko track karo
-    await track_user(user)
-    
-    conn = sqlite3.connect('sangmata.db', check_same_thread=False)
-    c = conn.cursor()
-    
-    try:
-        c.execute("SELECT name, username, timestamp FROM user_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 25", (user_id,))
-        records = c.fetchall()
-        
-        if records:
-            history_msg = f"📜 **Real History for {user.first_name}**\n\n"
-            
-            for i, (name, username, time) in enumerate(records, 1):
-                history_msg += f"**{i}. 👤 {name}**\n"
-                history_msg += f"   📱 @{username}\n" 
-                history_msg += f"   🕐 {time}\n\n"
-            
-            # Agar sirf 1 record hai toh message different dikhao
-            if len(records) == 1:
-                history_msg += "**💡 Tip:** Name ya username change karo aur phir /history check karo!"
-            
-            await message.reply_text(history_msg)
-            print(f"✅ Real history sent to {user_id} - {len(records)} records")
-        else:
-            await message.reply_text("""
-❌ **No History Found Yet!**
-
-**Kyun?** 
-- Bot naya start hua hai
-- Abhi tak koi name/username change nahi hua
-- Tracking abhi shuru hua hai
-
-**📝 Solution:**
-1. Apna name ya username change karo
-2. Phir /history check karo
-3. Ya bot ko group mein add karo
-            """)
-            
-    except Exception as e:
-        await message.reply_text("❌ Error getting real history")
-        print(f"❌ History error: {e}")
-    finally:
-        conn.close()
-
-# /find command - REAL user data
-@app.on_message(filters.command("find"))
-async def find_cmd(client, message):
-    user = message.from_user
-    
-    if len(message.command) < 2:
-        await message.reply_text("""
-❌ **Usage:** `/find USER_ID`
-
-**Example:** `/find 5511953244`
-
-**Note:** Sirf REAL data dikhega jo actually track hua hai
-        """)
-        return
-    
-    try:
-        target_id = int(message.command[1])
-    except:
-        await message.reply_text("❌ User ID must be a number!")
-        return
-    
-    print(f"🔍 {user.id} finding REAL history for {target_id}")
-    
-    conn = sqlite3.connect('sangmata.db', check_same_thread=False)
-    c = conn.cursor()
-    
-    try:
-        c.execute("SELECT name, username, timestamp FROM user_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 25", (target_id,))
-        records = c.fetchall()
-        
-        if records:
-            history_msg = f"📜 **Real History for User ID:** `{target_id}`\n\n"
-            
-            for i, (name, username, time) in enumerate(records, 1):
-                history_msg += f"**{i}. 👤 {name}**\n"
-                history_msg += f"   📱 @{username}\n"
-                history_msg += f"   🕐 {time}\n\n"
-            
-            await message.reply_text(history_msg)
-            print(f"✅ Real history found for {target_id} - {len(records)} records")
-        else:
-            await message.reply_text(f"""
-❌ **No Real History Found for** `{target_id}`
-
-**Possible Reasons:**
-- User ne abhi tak name/username change nahi kiya
-- Bot ne user ko abhi tak track nahi kiya  
-- User ID galat hai
-
-**💡 Solution:**
-- User ko bot ke saath interact karwao
-- User apna name change kare
-- Ya user ko group mein add karo jahan bot hai
-            """)
-            
-    except Exception as e:
-        await message.reply_text("❌ Error finding real user history")
-        print(f"❌ Find error: {e}")
-    finally:
-        conn.close()
-
-# Har message pe REAL tracking
-@app.on_message(filters.all)
-async def track_all_messages(client, message):
-    if message.from_user:
-        await track_user(message.from_user)
-
-# Callback queries
-@app.on_callback_query()
-async def handle_callbacks(client, callback_query):
-    user = callback_query.from_user
-    data = callback_query.data
-    
-    if data == "myhistory":
-        await callback_query.message.edit_text("🔄 Getting your REAL history...")
-        await history_cmd(client, callback_query.message)
-    
-    await callback_query.answer()
-
-print("=" * 50)
-print("🚀 REAL DATA BOT STARTING...")
-print("✅ Only REAL data will be tracked")
-print("✅ No fake data")
-print("✅ Real user changes only")
-print("🎯 Bot is NOW TRACKING REAL DATA!")
-print("=" * 50)
-
-# Bot run karo
-app.run()
+if __name__ == "__main__":
+    print("✅ Bot started successfully!")
+    app.run()
