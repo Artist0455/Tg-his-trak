@@ -1,14 +1,31 @@
+# render.yaml
+
 services:
   - type: web
-    name: sangmata-bot
+    name: instagram-downloader-bot
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    region: oregon  # Options: oregon, ohio, frankfurt, singapore
+    branch: main
+    
+    # Build Configuration
+    buildCommand: |
+      pip install -r requirements.txt
+      
+    # Start Command  
+    startCommand: |
+      python bot.py
+      
+    # Environment Variables
     envVars:
       - key: API_ID
         value: 25136703
-      - key: API_HASH
-        value: "accfaf5ecd981c67e481328515c39f89"
+        sync: false
+        
+      - key: API_HASH  
+        value: accfaf5ecd981c67e481328515c39f89
+        sync: false
+        
       - key: BOT_TOKEN
-        value: "8244179451:AAFW8SLabiTyCuTge2fz5LL6VA5sNOH_3pQ"
+        value: 8244179451:AAER_dLg1rQT2E9wuE5XRqDumNzuBWU1JPE
+        sync: false
