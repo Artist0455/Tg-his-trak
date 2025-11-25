@@ -58,12 +58,12 @@ async def donate_command(client, message: Message):
     )
 
 # Handle Help button
-@app.on_message(filters.regex(r'^ℹ Help$'))
+@app.on_message(filters.regex("ℹ Help"))
 async def help_button(client, message: Message):
     await help_command(client, message)
 
 # Handle Donate button  
-@app.on_message(filters.regex(r'^💰 Donate$'))
+@app.on_message(filters.regex("💰 Donate"))
 async def donate_button(client, message: Message):
     await donate_command(client, message)
 
@@ -141,20 +141,24 @@ async def send_post(client, message: Message):
         print(f"Error: {e}")
         await processing_msg.edit_text('❌ Error downloading. Make sure:\n• Instagram account is public\n• Link is correct\n• Try again later')
 
-# Handle username for profile picture
-@app.on_message(filters.text & ~filters.command)
-async def handle_text(client, message: Message):
+# Handle all text messages (for usernames)
+@app.on_message(filters.text)
+async def handle_all_text(client, message: Message):
     text = message.text.strip()
     
-    # Skip if it's a button text
+    # Skip if it's a command
+    if text.startswith('/'):
+        return
+        
+    # Skip if it's a button text (already handled by separate handlers)
     if text in ['ℹ Help', '💰 Donate']:
         return
         
-    # Skip if it's a URL
+    # Skip if it's a URL (already handled by URL handler)
     if text.startswith('http'):
         return
     
-    # Check if it looks like a username (no spaces, no special chars except _ and .)
+    # Check if it looks like a username
     if re.match(r'^[a-zA-Z0-9_.]{1,30}$', text):
         await download_profile_pic(client, message, text)
     else:
