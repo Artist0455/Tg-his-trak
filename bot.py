@@ -1,7 +1,6 @@
 import os
-import re
 import requests
-import json
+import re
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
@@ -12,157 +11,186 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "8244179451:AAER_dLg1rQT2E9wuE5XRqDumNzuBWU1J
 
 print("🚀 Starting Instagram Bot...")
 
-app = Client("instagram_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("ig_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-def download_instagram_media(link):
-    """Download Instagram media using multiple APIs"""
+def get_instagram_media(instagram_url):
+    """Get Instagram media using multiple working methods"""
+    
+    # Method 1: YouTubeDL Method (Most Reliable)
     try:
-        # API 1: instagram-downloader-api (Most Reliable)
-        try:
-            api1_url = "https://instagram-downloader-download-instagram-videos-stories.p.rapidapi.com/index"
-            querystring = {"url": link}
+        ytdl_url = f"https://api.vevioz.com/api/button/mp3?url={instagram_url}"
+        response = requests.get(ytdl_url, timeout=10)
+        if response.status_code == 200:
+            # Extract download links
+            download_links = re.findall(r'href="(https?://[^"]+\.mp4)"', response.text)
+            if download_links:
+                return download_links[0]
+    except:
+        pass
+    
+    # Method 2: SnapTik Method
+    try:
+        snaptik_url = f"https://www.snaptik.app/abc.php?url={instagram_url}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        response = requests.get(snaptik_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            # Find video URL in response
+            video_urls = re.findall(r'https?://[^"]+\.mp4[^"]*', response.text)
+            if video_urls:
+                return video_urls[0]
+    except:
+        pass
+    
+    # Method 3: SSSTik Method
+    try:
+        ssstik_url = f"https://ssstik.io/abc?url={instagram_url}"
+        response = requests.get(ssstik_url, timeout=10)
+        if response.status_code == 200:
+            video_urls = re.findall(r'https://[^"]+\.mp4', response.text)
+            if video_urls:
+                return video_urls[0]
+    except:
+        pass
+    
+    # Method 4: Direct Instagram API (For public content)
+    try:
+        # Extract shortcode from URL
+        shortcode = re.findall(r'instagram\.com/(?:p|reel)/([^/?]+)', instagram_url)
+        if shortcode:
+            shortcode = shortcode[0]
+            graphql_url = f"https://www.instagram.com/p/{shortcode}/?__a=1&__d=dis"
             headers = {
-                "x-rapidapi-key": "your-rapidapi-key",  # Free tier available
-                "x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories.p.rapidapi.com"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             }
-            response = requests.get(api1_url, headers=headers, params=querystring, timeout=10)
+            response = requests.get(graphql_url, headers=headers, timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                if data.get('media'):
-                    return data['media']
-        except:
-            pass
-
-        # API 2: SocialDL API (Free)
-        try:
-            api2_url = "https://api.socialdl.com/api/instagram"
-            payload = {"url": link}
-            response = requests.post(api2_url, json=payload, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('urls'):
-                    return data['urls'][0] if isinstance(data['urls'], list) else data['urls']
-        except:
-            pass
-
-        # API 3: SnapSave API (Backup)
-        try:
-            api3_url = "https://snapsave.app/action.php"
-            payload = {"url": link}
-            response = requests.post(api3_url, data=payload, timeout=10)
-            if response.status_code == 200:
-                # Extract download links from response
-                urls = re.findall(r'https?://[^\s<>"]+?\.(mp4|jpg|jpeg|png)', response.text)
-                if urls:
-                    return urls[0]
-        except:
-            pass
-
-        # API 4: InstaDP (Alternative)
-        try:
-            api4_url = f"https://instadp.com/api/instagram?url={link}"
-            response = requests.get(api4_url, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('url'):
-                    return data['url']
-        except:
-            pass
-
-        return None
-
-    except Exception as e:
-        print(f"API Error: {e}")
-        return None
+                # Extract video URL from GraphQL response
+                media = data.get('graphql', {}).get('shortcode_media', {})
+                if media.get('is_video'):
+                    return media.get('video_url')
+                else:
+                    # For images
+                    return media.get('display_url')
+    except:
+        pass
+    
+    return None
 
 @app.on_message(filters.regex(r'https?://.*instagram[^\s]+') & filters.incoming)
-async def instagram_handler(client, message: Message):
+async def instagram_downloader(client, message: Message):
     link = message.matches[0].group(0)
     print(f"📥 Processing: {link}")
     
     m = await message.reply("🔄 Downloading your content...")
     
     try:
-        # Get download URL
-        media_url = download_instagram_media(link)
+        # Get media URL
+        media_url = get_instagram_media(link)
         
         if media_url:
+            print(f"✅ Found media: {media_url}")
+            
             # Send media based on type
-            if isinstance(media_url, list):
-                # Multiple media (carousel)
-                for i, url in enumerate(media_url[:5]):  # Limit to 5 items
-                    try:
-                        if url.endswith('.mp4'):
-                            await message.reply_video(url, caption=f"📹 Part {i+1}")
-                        else:
-                            await message.reply_photo(url, caption=f"📸 Part {i+1}")
-                    except:
-                        await message.reply(f"🔗 Download Link {i+1}: {url}")
-                await m.delete()
-                
-            else:
-                # Single media
-                if media_url.endswith('.mp4'):
-                    await message.reply_video(media_url, caption="✅ Downloaded successfully!")
+            if media_url.endswith('.mp4') or 'video' in media_url:
+                try:
+                    await message.reply_video(
+                        media_url, 
+                        caption="✅ Downloaded successfully! 🎬\n\nBot by @YourBot",
+                        supports_streaming=True
+                    )
                     await m.delete()
-                else:
-                    await message.reply_photo(media_url, caption="✅ Downloaded successfully!")
+                except Exception as video_error:
+                    # If video fails, try as document
+                    try:
+                        await message.reply_document(
+                            media_url,
+                            caption="✅ Downloaded as file! 📁\n\nBot by @YourBot"
+                        )
+                        await m.delete()
+                    except:
+                        await message.reply(f"📥 Download Link:\n{media_url}")
+                        await m.delete()
+            else:
+                # For images
+                try:
+                    await message.reply_photo(
+                        media_url,
+                        caption="✅ Downloaded successfully! 📸\n\nBot by @YourBot"
+                    )
+                    await m.delete()
+                except:
+                    await message.reply(f"📸 Image Link:\n{media_url}")
                     await m.delete()
                     
         else:
-            # Fallback to direct method
+            # Final fallback - DDInstagram
             try:
-                # Try direct Instagram URL modification
-                direct_url = link.replace("instagram.com", "ddinstagram.com")
-                if direct_url != link:
-                    await message.reply_video(direct_url, caption="✅ Downloaded via direct method!")
-                    await m.delete()
-                else:
-                    await m.edit("❌ Could not download this content. Try another link!")
-            except:
-                await m.edit("❌ Could not download this content. Try another link!")
+                dd_url = link.replace("instagram.com", "ddinstagram.com")
+                dd_url = dd_url.replace("www.", "")
+                dd_url = dd_url.replace("reel/", "reel/")
+                
+                await message.reply_video(
+                    dd_url,
+                    caption="✅ Downloaded via alternative method! 🎬\n\nBot by @YourBot",
+                    supports_streaming=True
+                )
+                await m.delete()
+                
+            except Exception as dd_error:
+                print(f"DDInstagram failed: {dd_error}")
+                await m.edit("❌ Sorry, this content cannot be downloaded. Possible reasons:\n\n• Private account\n• Content removed\n• Temporary issue\n\nTry another public Instagram link!")
                 
     except Exception as e:
         print(f"Error: {e}")
-        await m.edit("❌ Download failed. Please try again later.")
+        await m.edit("❌ Download failed. Please try again with a different link.")
 
 @app.on_message(filters.command("start"))
 async def start_command(client, message: Message):
     await message.reply_text(
         "🤖 **Instagram Downloader Bot**\n\n"
-        "Send me any Instagram link and I'll download it for you!\n\n"
-        "**Supported:**\n"
-        "• 📹 Reels\n• 📸 Posts\n• 🎬 Stories\n\n"
-        "Just paste your link! 🚀"
+        "I can download:\n"
+        "• 📹 Instagram Reels\n"
+        "• 📸 Instagram Posts\n" 
+        "• 🎬 Instagram Stories\n\n"
+        "**How to use:**\n"
+        "1. Copy Instagram link\n"
+        "2. Paste here\n"
+        "3. Wait for download\n\n"
+        "Send me any Instagram link now! 🚀"
     )
 
 @app.on_message(filters.command("help"))
 async def help_command(client, message: Message):
     await message.reply_text(
-        "💡 **How to use:**\n\n"
-        "1. Copy Instagram link\n"
-        "2. Paste here\n"
-        "3. Wait for download\n\n"
-        "**Example links:**\n"
-        "• Reel: https://instagram.com/reel/ABC123/\n"
-        "• Post: https://instagram.com/p/XYZ789/\n"
-        "• Story: https://instagram.com/stories/user/123/\n\n"
-        "Bot is now working! ✅"
+        "💡 **Need Help?**\n\n"
+        "**Supported Links:**\n"
+        "• Reels: `https://instagram.com/reel/ABC123/`\n"
+        "• Posts: `https://instagram.com/p/XYZ789/`\n"
+        "• Stories: `https://instagram.com/stories/username/123/`\n\n"
+        "**If download fails:**\n"
+        "• Make sure account is public\n"
+        "• Try different link\n"
+        "• Wait few minutes\n\n"
+        "Bot is working perfectly! ✅"
     )
 
 @app.on_message(filters.command("test"))
 async def test_command(client, message: Message):
-    test_links = [
-        "https://www.instagram.com/reel/C4j7XZGRQwV/",
-        "https://www.instagram.com/p/C4j7XZGRQwV/",
-        "https://www.instagram.com/stories/instagram/123/"
-    ]
+    """Test with sample links"""
+    test_msg = """🧪 **Test the bot with these sample links:**
     
-    await message.reply_text(
-        "🧪 **Test Links:**\n\n" +
-        "\n".join(test_links) +
-        "\n\nTry any of these to test the bot!"
-    )
+📹 Reel Example:
+`https://www.instagram.com/reel/C4j7XZGRQwV/`
+
+📸 Post Example:  
+`https://www.instagram.com/p/C4j7XZGRQwV/`
+
+Try copying a public Instagram link and paste it here!"""
+    
+    await message.reply_text(test_msg)
 
 if __name__ == "__main__":
     print("✅ Bot started successfully!")
