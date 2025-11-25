@@ -1,38 +1,25 @@
-# SangMata Telegram Bot
+# Instagram Downloader Telegram Bot
 
-A Telegram bot that tracks username and name changes of users.
+A Telegram bot that downloads Instagram Reels, Posts, and Stories.
 
-## Features
-- Track name and username changes automatically
-- View your own history with `/history`
-- Find other users' history with `/find <user_id>`
-- Privacy focused - only stores name/username data
+## 🚀 Deploy on Render
 
-## Deployment on Render
+### Method 1: One-Click Deploy
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+### Method 2: Manual Deployment
 
 1. **Fork this repository**
 2. **Create a new Web Service on Render**
 3. **Connect your GitHub repository**
-4. **Set environment variables:**
-   - `API_ID`: Your Telegram API ID
-   - `API_HASH`: Your Telegram API Hash  
-   - `BOT_TOKEN`: Your Bot Token from @BotFather
+4. **Add environment variables:**
+   - `API_ID`: From https://my.telegram.org
+   - `API_HASH`: From https://my.telegram.org  
+   - `BOT_TOKEN`: From @BotFather on Telegram
+   - `LOG_GROUP`: Optional - Group ID for logs
+   - `DUMP_GROUP`: Optional - Group ID for storing media
 
-5. **Deploy!**
-
-## Environment Variables
-Get these from https://my.telegram.org:
-- `API_ID`
-- `API_HASH` 
-
-Get Bot Token from @BotFather on Telegram:
-- `BOT_TOKEN`
-
-## Commands
-- `/start` - Start the bot
-- `/history` - View your name history
-- `/find <user_id>` - Find user's history
-- `/stats` - Bot statistics
-
-## Privacy
-This bot only stores name and username changes, no personal messages or media.
+5. **Build Command:**
+   ```bash
+   pip install -r requirements.txt
