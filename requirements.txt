@@ -1,6 +1,5 @@
-pyrogram==2.0.106
-tgcrypto==1.2.5
-requests==2.31.0
-beautifulsoup4==4.12.2
-soupsieve==2.5
-python-dotenv==1.0.0
+Flask==2.3.3
+python-telegram-bot==20.7
+telethon==1.28.5
+pysocks==1.7.1
+csv23==0.3.3
